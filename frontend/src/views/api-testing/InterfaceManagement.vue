@@ -1145,7 +1145,9 @@ const onSearch = async (value) => {
   }
 }
 
-const selectSearchResult = (item) => {
+const selectSearchResult = async (item) => {
+  // 切换接口前先静默保存当前接口的修改
+  await saveCurrentRequestSilently()
   selectedRequest.value = item
   searchKeyword.value = ''
   filteredCollections.value = []
@@ -1213,6 +1215,13 @@ const loadEnvironments = async (projectId) => {
       env.scope === 'GLOBAL' ||
       (env.scope === 'LOCAL' && (!projectId || env.project === projectId))
     )
+    // 默认选中“参数化”环境（未手动选择时）
+    if (!selectedEnvironment.value) {
+      const defaultEnv = environments.value.find(env => env.name === '参数化')
+      if (defaultEnv) {
+        selectedEnvironment.value = defaultEnv.id
+      }
+    }
   } catch (error) {
     ElMessage.error('加载环境失败')
     console.error('加载环境失败:', error)
@@ -1320,6 +1329,8 @@ const flattenCollections = (items, parent = null) => {
 
 const onNodeClick = async (data) => {
   if (data.type === 'request') {
+    // 切换接口前先静默保存当前接口的修改
+    await saveCurrentRequestSilently()
     try {
       const apiResponse = await api.get(`/api-testing/requests/${data.id}/`)
       const requestData = apiResponse.data
@@ -1413,11 +1424,14 @@ const onNodeCollapse = (node) => {
   expandedKeys.value = expandedKeys.value.filter(key => key !== node.id)
 }
 
-const createEmptyRequest = () => {
+const createEmptyRequest = async () => {
   if (!selectedProject.value) {
     ElMessage.warning('请先选择项目')
     return
   }
+
+  // 新建接口前先静默保存当前接口的修改
+  await saveCurrentRequestSilently()
 
   const newRequest = {
     id: null,
@@ -1875,6 +1889,86 @@ const onHeadersUpdate = (headers) => {
   }
 }
 
+// 构建请求保存的 payload（手动保存与静默保存共用）
+const buildRequestPayload = () => {
+  const req = selectedRequest.value
+  if (!req) return null
+
+  // 准备保存的数据
+  let bodyData = {}
+
+  if (hasBody.value) {
+    if (bodyType.value === 'none') {
+      bodyData = {}
+    } else if (bodyType.value === 'raw' && rawBody.value) {
+      if (rawType.value === 'json') {
+        try {
+          bodyData = {
+            type: 'json',
+            data: JSON.parse(rawBody.value)
+          }
+        } catch (e) {
+          bodyData = {
+            type: 'raw',
+            data: rawBody.value
+          }
+        }
+      } else {
+        bodyData = {
+          type: 'raw',
+          data: rawBody.value
+        }
+      }
+    } else if (bodyType.value === 'form-data') {
+      bodyData = {
+        type: 'form-data',
+        data: formData.value || []
+      }
+    } else if (bodyType.value === 'x-www-form-urlencoded') {
+      bodyData = {
+        type: 'x-www-form-urlencoded',
+        data: formUrlEncoded.value || []
+      }
+    } else if (bodyType.value === 'binary') {
+      bodyData = {
+        type: 'binary',
+        data: null
+      }
+    }
+  }
+
+  // 直接从KeyValueEditor组件获取当前headers（完整数组格式）
+  let finalHeaders = []
+  if (headersEditorRef.value) {
+    const rows = headersEditorRef.value.rows || []
+    finalHeaders = rows
+      .filter(row => row.enabled && row.key && row.key.trim())
+      .map(row => ({
+        key: row.key.trim(),
+        value: row.value || '',
+        description: row.description || '',
+        enabled: row.enabled !== false
+      }))
+  } else {
+    if (req.headers && Array.isArray(req.headers)) {
+      finalHeaders = req.headers.filter(item => item.enabled && item.key)
+    }
+  }
+
+  const requestData = {
+    ...req,
+    params: Array.isArray(req.params) ? convertKeyValueArrayToObject(req.params || []) : req.params,
+    headers: finalHeaders
+  }
+
+  // 对于GET请求，不包含body字段
+  if (hasBody.value) {
+    requestData.body = bodyData
+  }
+
+  return requestData
+}
+
 const saveRequest = async () => {
   if (!selectedRequest.value || !selectedRequest.value.url) {
     ElMessage.warning('请填写请求URL')
@@ -1884,77 +1978,8 @@ const saveRequest = async () => {
   try {
     saving.value = true
 
-    // 准备保存的数据
-    let bodyData = {}
-
-    if (hasBody.value) {
-      if (bodyType.value === 'none') {
-        bodyData = {}
-      } else if (bodyType.value === 'raw' && rawBody.value) {
-        if (rawType.value === 'json') {
-          try {
-            bodyData = {
-              type: 'json',
-              data: JSON.parse(rawBody.value)
-            }
-          } catch (e) {
-            bodyData = {
-              type: 'raw',
-              data: rawBody.value
-            }
-          }
-        } else {
-          bodyData = {
-            type: 'raw',
-            data: rawBody.value
-          }
-        }
-      } else if (bodyType.value === 'form-data') {
-        bodyData = {
-          type: 'form-data',
-          data: formData.value || []
-        }
-      } else if (bodyType.value === 'x-www-form-urlencoded') {
-        bodyData = {
-          type: 'x-www-form-urlencoded',
-          data: formUrlEncoded.value || []
-        }
-      } else if (bodyType.value === 'binary') {
-        bodyData = {
-          type: 'binary',
-          data: null
-        }
-      }
-    }
-
-    // 直接从KeyValueEditor组件获取当前headers（完整数组格式）
-    let finalHeaders = []
-    if (headersEditorRef.value) {
-      const rows = headersEditorRef.value.rows || []
-      finalHeaders = rows
-        .filter(row => row.enabled && row.key && row.key.trim())
-        .map(row => ({
-          key: row.key.trim(),
-          value: row.value || '',
-          description: row.description || '',
-          enabled: row.enabled !== false
-        }))
-    } else {
-      if (selectedRequest.value.headers && Array.isArray(selectedRequest.value.headers)) {
-        finalHeaders = selectedRequest.value.headers.filter(item => item.enabled && item.key)
-      }
-    }
-
-    const requestData = {
-      ...selectedRequest.value,
-      params: Array.isArray(selectedRequest.value.params) ? convertKeyValueArrayToObject(selectedRequest.value.params || []) : selectedRequest.value.params,
-      headers: finalHeaders
-    }
-    
-    // 对于GET请求，不包含body字段
-    if (hasBody.value) {
-      requestData.body = bodyData
-    }
+    const requestData = buildRequestPayload()
+    if (!requestData) return
 
     let response
     if (selectedRequest.value.id) {
@@ -1971,6 +1996,23 @@ const saveRequest = async () => {
     console.error('保存失败:', error)
   } finally {
     saving.value = false
+  }
+}
+
+// 静默保存当前接口：切换接口/新建接口前自动保存修改，不刷新列表、不弹提示
+const saveCurrentRequestSilently = async () => {
+  const req = selectedRequest.value
+  // 仅对已存在的接口静默保存；新建未保存（无 id）或未填 URL 的接口跳过
+  if (!req || !req.id || !req.url) return
+
+  const requestData = buildRequestPayload()
+  if (!requestData) return
+
+  try {
+    await api.put(`/api-testing/requests/${req.id}/`, requestData)
+  } catch (error) {
+    // 静默保存失败不打断切换流程，仅记录日志
+    console.warn('切换接口时静默保存失败:', error)
   }
 }
 

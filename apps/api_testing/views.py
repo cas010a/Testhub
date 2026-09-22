@@ -787,7 +787,12 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
                     
                     # 使用共享的断言执行方法
                     assertions_results = execute_assertions(response, assertions)
-                    
+
+                    # 响应变量提取：自动写入环境变量，供后续请求 {{变量}} 引用
+                    extracted_vars = {}
+                    if api_request.extract_rules:
+                        extracted_vars = apply_extract_rules(response, api_request.extract_rules, test_suite.environment, variables)
+
                     # 检查所有断言是否通过
                     passed = True
                     error_message = ''
@@ -823,7 +828,20 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
                         'response_time': response_time,
                         'passed': passed,
                         'error': error_message,
-                        'assertions_results': assertions_results
+                        'assertions_results': assertions_results,
+                        'extracted_variables': extracted_vars,
+                        'request_data': {
+                            'url': url,
+                            'method': api_request.method,
+                            'headers': headers,
+                            'params': params,
+                            'body': body_data
+                        },
+                        'response_data': {
+                            'headers': dict(response.headers),
+                            'body': response.text,
+                            'json': response.json() if response.headers.get('content-type', '').startswith('application/json') else None
+                        }
                     })
                     
                     # 保存请求历史

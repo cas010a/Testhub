@@ -353,7 +353,19 @@ def execute_test_suite(test_suite, environment, executed_by):
                     'passed': passed,
                     'error': error_message,
                     'assertions_results': assertions_results,
-                    'extracted_variables': extracted_vars
+                    'extracted_variables': extracted_vars,
+                    'request_data': {
+                        'url': url,
+                        'method': api_request.method,
+                        'headers': headers,
+                        'params': params,
+                        'body': body_data
+                    },
+                    'response_data': {
+                        'headers': dict(response.headers),
+                        'body': response.text,
+                        'json': response.json() if response.headers.get('content-type', '').startswith('application/json') else None
+                    }
                 })
                 
                 # 保存请求历史
