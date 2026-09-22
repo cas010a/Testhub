@@ -1,0 +1,111 @@
+from rest_framework import serializers
+from django.contrib.auth import authenticate
+from .models import User, UserProfile
+
+class UserSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'avatar')
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 
+                 'avatar', 'phone', 'department', 'position', 'is_active',
+                 'is_staff', 'is_superuser',
+                 'date_joined', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'date_joined', 'created_at', 'updated_at',
+                            'is_staff', 'is_superuser']
+
+
+class UserManageSerializer(serializers.ModelSerializer):
+    """管理员创建/编辑用户，支持设置密码、启禁用与管理员角色"""
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True, min_length=6)
+    password_confirm = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'password', 'password_confirm',
+                  'first_name', 'last_name', 'phone', 'department', 'position',
+                  'is_active', 'is_staff', 'date_joined']
+        read_only_fields = ['id', 'date_joined']
+        extra_kwargs = {
+            'username': {'required': True},
+            'email': {'required': False, 'allow_blank': True},
+        }
+
+    def validate(self, attrs):
+        password = attrs.get('password', '')
+        password_confirm = attrs.get('password_confirm', '')
+        if password or password_confirm:
+            if password != password_confirm:
+                raise serializers.ValidationError('两次输入的密码不一致')
+            if password and len(password) < 6:
+                raise serializers.ValidationError('密码长度不能少于6位')
+        else:
+            # 创建时必须提供密码，编辑时可留空表示不修改
+            if self.instance is None:
+                raise serializers.ValidationError({'password': '创建用户时必须设置密码'})
+        return attrs
+
+    def create(self, validated_data):
+        password = validated_data.pop('password', None)
+        validated_data.pop('password_confirm', None)
+        if not password:
+            raise serializers.ValidationError({'password': '创建用户时必须设置密码'})
+        user = User.objects.create_user(password=password, **validated_data)
+        return user
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop('password', None)
+        validated_data.pop('password_confirm', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if password:
+            instance.set_password(password)
+        instance.save()
+        return instance
+
+class UserCreateSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=6)
+    password_confirm = serializers.CharField(write_only=True)
+    
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password', 'password_confirm',
+                 'first_name', 'last_name', 'phone', 'department', 'position']
+    
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError("密码不一致")
+        return attrs
+    
+    def create(self, validated_data):
+        validated_data.pop('password_confirm')
+        user = User.objects.create_user(**validated_data)
+        return user
+
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField()
+    
+    def validate(self, attrs):
+        username = attrs.get('username')
+        password = attrs.get('password')
+        
+        if username and password:
+            user = authenticate(username=username, password=password)
+            if not user:
+                raise serializers.ValidationError('用户名或密码错误')
+            if not user.is_active:
+                raise serializers.ValidationError('用户已被禁用')
+        else:
+            raise serializers.ValidationError('用户名和密码不能为空')
+        
+        attrs['user'] = user
+        return attrs
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = '__all__'
