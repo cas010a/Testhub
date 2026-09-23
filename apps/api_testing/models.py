@@ -3,6 +3,8 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 import json
 
+from .fields import EncryptedJSONField
+
 User = get_user_model()
 
 
@@ -87,9 +89,9 @@ class ApiRequest(models.Model):
                                     verbose_name='请求类型')
     method = models.CharField(max_length=10, choices=HTTP_METHODS, default='GET', verbose_name='请求方法')
     url = models.TextField(verbose_name='请求URL')
-    headers = models.JSONField(default=dict, verbose_name='请求头')
-    params = models.JSONField(default=dict, verbose_name='URL参数')
-    body = models.JSONField(default=dict, verbose_name='请求体')
+    headers = EncryptedJSONField(default=dict, verbose_name='请求头')
+    params = EncryptedJSONField(default=dict, verbose_name='URL参数')
+    body = EncryptedJSONField(default=dict, verbose_name='请求体')
     auth = models.JSONField(default=dict, verbose_name='认证信息')
     pre_request_script = models.TextField(blank=True, verbose_name='请求前脚本')
     post_request_script = models.TextField(blank=True, verbose_name='请求后脚本')

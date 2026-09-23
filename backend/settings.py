@@ -12,6 +12,9 @@ def parse_csv(value):
 
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here')
 
+# 接口测试入参落库加密密钥（AES-256，写在 .env 不进 git）
+TEST_DATA_ENCRYPT_KEY = config('TEST_DATA_ENCRYPT_KEY', default='')
+
 DEBUG = config('DEBUG', default=True, cast=bool)
 
 # 根据DEBUG模式设置ALLOWED_HOSTS，生产环境不应使用通配符

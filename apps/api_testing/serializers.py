@@ -97,6 +97,10 @@ class ApiRequestSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
+    # 模型字段是落库加密字段（EncryptedJSONField），显式声明为 JSON 以便正确序列化/反序列化
+    headers = serializers.JSONField()
+    params = serializers.JSONField()
+    body = serializers.JSONField()
 
     class Meta:
         model = ApiRequest
