@@ -204,6 +204,11 @@ export default {
     delete: 'Delete',
     batchAdopt: 'Batch Adopt',
     batchDiscard: 'Batch Discard',
+    exportXmindBtn: '🗺️ Export XMind',
+    exportingXmind: '🗺️ Exporting...',
+    exportXmindSuccess: 'XMind exported successfully',
+    exportXmindFailed: 'XMind export failed',
+    noCasesToExport: 'No test cases to export',
 
     // Empty State
     noTasks: 'No Tasks',

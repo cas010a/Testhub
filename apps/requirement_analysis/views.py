@@ -3333,7 +3333,7 @@ class ConfigStatusViewSet(viewsets.ViewSet):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def export_xmind(request):
-    """将AI生成的测试用例导出为XMind思维导图文件
+    """将AI生成的测试用例导出为XMind思维导图文件（XMind 8 格式）
 
     请求体: {
         "title": "任务标题",
@@ -3342,12 +3342,16 @@ def export_xmind(request):
              "steps": "...", "expected": "...", "priority": "P2"}
         ]
     }
-    返回: .xmind 文件（XMind 8 兼容格式，zip 包含 content.json / metadata.json / manifest.json）
+    返回: .xmind 文件（XMind 8 兼容，zip 包含 content.xml / meta.xml / META-INF/manifest.xml）
     """
     import io
-    import uuid
+    import string
+    import random
+    import time
+    import base64
     import zipfile
     from datetime import datetime
+    from xml.sax.saxutils import escape
     from django.http import FileResponse
 
     title = request.data.get('title') or 'AI生成测试用例'
@@ -3362,8 +3366,26 @@ def export_xmind(request):
         s = str(value).replace('\r\n', '\n').replace('\r', '\n')
         return ''.join(ch for ch in s if ord(ch) >= 32 or ch in '\n\t').strip()
 
-    # 构建思维导图主题树
-    topics = []
+    def gen_id():
+        """生成 XMind 风格 id（27 位小写字母数字）"""
+        alphabet = string.ascii_lowercase + string.digits
+        return ''.join(random.choices(alphabet, k=27))
+
+    ts = str(int(time.time() * 1000))
+
+    def topic_xml(text, children_xml=None, structure_class=None):
+        attrs = f'id="{gen_id()}" modified-by="TestHub" timestamp="{ts}"'
+        if structure_class:
+            attrs += f' structure-class="{structure_class}"'
+        inner = f'<title>{escape(text)}</title>'
+        if children_xml:
+            inner += '<children><topics type="attached">' + \
+                     ''.join(children_xml) + \
+                     '</topics></children>'
+        return f'<topic {attrs}>{inner}</topic>'
+
+    # 构建每条用例的主题（含前置条件/操作步骤/预期结果/优先级子节点）
+    case_topics = []
     for index, tc in enumerate(test_cases, 1):
         case_id = clean_text(tc.get('caseId')) or f'TC{str(index).zfill(3)}'
         scenario = clean_text(tc.get('scenario')) or f'测试场景{index}'
@@ -3374,62 +3396,66 @@ def export_xmind(request):
 
         child_topics = []
         if precondition:
-            child_topics.append({
-                'id': str(uuid.uuid4()), 'class': 'topic',
-                'title': f'前置条件: {precondition}'
-            })
+            child_topics.append(f'前置条件: {precondition}')
         if steps:
-            child_topics.append({
-                'id': str(uuid.uuid4()), 'class': 'topic',
-                'title': f'操作步骤: {steps}'
-            })
+            child_topics.append(f'操作步骤: {steps}')
         if expected:
-            child_topics.append({
-                'id': str(uuid.uuid4()), 'class': 'topic',
-                'title': f'预期结果: {expected}'
-            })
-        child_topics.append({
-            'id': str(uuid.uuid4()), 'class': 'topic',
-            'title': f'优先级: {priority}'
-        })
+            child_topics.append(f'预期结果: {expected}')
+        child_topics.append(f'优先级: {priority}')
 
-        topics.append({
-            'id': str(uuid.uuid4()),
-            'class': 'topic',
-            'title': f'{case_id} {scenario}',
-            'children': {'attached': child_topics} if child_topics else {}
-        })
+        child_xml = [topic_xml(t) for t in child_topics]
+        case_topics.append(topic_xml(f'{case_id} {scenario}', child_xml))
 
-    # XMind 8 格式：content.json / metadata.json / manifest.json
-    content = [{
-        'id': str(uuid.uuid4()),
-        'class': 'sheet',
-        'title': '测试用例',
-        'topic': {
-            'id': str(uuid.uuid4()),
-            'class': 'topic',
-            'title': f'测试用例 - {clean_text(title)}',
-            'children': {'attached': topics} if topics else {}
-        }
-    }]
+    root_topic = topic_xml(f'测试用例 - {clean_text(title)}', case_topics,
+                           structure_class='org.xmind.ui.map.unbalanced')
 
-    metadata = {
-        'creator': {'name': 'TestHub', 'version': '1.0.0'},
-        'metadata': {'id': str(uuid.uuid4())}
-    }
+    content_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="no"?>'
+                   '<xmap-content xmlns="urn:xmind:xmap:xmlns:content:2.0" '
+                   'xmlns:fo="http://www.w3.org/1999/XSL/Format" '
+                   'xmlns:svg="http://www.w3.org/2000/svg" '
+                   'xmlns:xhtml="http://www.w3.org/1999/xhtml" '
+                   'xmlns:xlink="http://www.w3.org/1999/xlink" '
+                   f'modified-by="TestHub" timestamp="{ts}" version="2.0">'
+                   f'<sheet id="{gen_id()}" modified-by="TestHub" timestamp="{ts}">'
+                   f'{root_topic}</sheet>'
+                   '</xmap-content>')
 
-    manifest = {
-        'file-entries': {
-            'content.json': {},
-            'metadata.json': {}
-        }
-    }
+    meta_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="no"?>'
+                '<meta xmlns="urn:xmind:xmap:xmlns:meta:2.0" version="2.0">'
+                '<Author><Name>TestHub</Name><Email/><Org/></Author>'
+                '<Creator><Name>TestHub</Name><Version>1.0.0</Version></Creator>'
+                '</meta>')
+
+    styles_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="no"?>'
+                  '<xmap-styles xmlns="urn:xmind:xmap:xmlns:style:2.0" '
+                  'xmlns:fo="http://www.w3.org/1999/XSL/Format" '
+                  'xmlns:svg="http://www.w3.org/2000/svg" version="2.0">'
+                  '<styles/><automatic-styles/><master-styles/>'
+                  '</xmap-styles>')
+
+    manifest_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="no"?>'
+                    '<manifest xmlns="urn:xmind:xmap:xmlns:manifest:1.0" password-hint="">'
+                    '<file-entry full-path="content.xml" media-type="text/xml"/>'
+                    '<file-entry full-path="META-INF/" media-type=""/>'
+                    '<file-entry full-path="META-INF/manifest.xml" media-type="text/xml"/>'
+                    '<file-entry full-path="meta.xml" media-type="text/xml"/>'
+                    '<file-entry full-path="styles.xml" media-type="text/xml"/>'
+                    '<file-entry full-path="Thumbnails/" media-type=""/>'
+                    '<file-entry full-path="Thumbnails/thumbnail.png" media-type="image/png"/>'
+                    '</manifest>')
+
+    # 1x1 透明 PNG，作为 XMind 8 要求的缩略图占位
+    thumbnail_png = base64.b64decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+    )
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr('content.json', json.dumps(content, ensure_ascii=False, indent=2))
-        zf.writestr('metadata.json', json.dumps(metadata, ensure_ascii=False))
-        zf.writestr('manifest.json', json.dumps(manifest))
+        zf.writestr('content.xml', content_xml)
+        zf.writestr('meta.xml', meta_xml)
+        zf.writestr('styles.xml', styles_xml)
+        zf.writestr('META-INF/manifest.xml', manifest_xml)
+        zf.writestr('Thumbnails/thumbnail.png', thumbnail_png)
 
     buf.seek(0)
     date_str = datetime.now().strftime('%Y%m%d')

@@ -133,6 +133,14 @@
                   @click="batchDiscardTask(task)">
                   {{ $t('generatedTestCases.batchDiscard') }}
                 </button>
+                <button
+                  v-if="task.status === 'completed'"
+                  class="xmind-btn"
+                  :disabled="exportingTaskId === task.task_id"
+                  @click="exportToXMind(task)">
+                  <span v-if="exportingTaskId === task.task_id">{{ $t('generatedTestCases.exportingXmind') }}</span>
+                  <span v-else>{{ $t('generatedTestCases.exportXmindBtn') }}</span>
+                </button>
               </div>
             </div>
           </div>
@@ -382,6 +390,7 @@
 <script>
 import api from '@/utils/api'
 import { ElMessage } from 'element-plus'
+import { parseTestCases } from '@/utils/testcaseParser'
 
 export default {
   name: 'GeneratedTestCaseList',
@@ -413,6 +422,7 @@ export default {
       // 选择相关数据
       selectedTasks: [], // 已选中的任务ID列表
       isDeleting: false, // 是否正在删除
+      exportingTaskId: null, // 正在导出XMind的任务ID
       // 分页相关数据
       pagination: {
         currentPage: 1,
@@ -738,6 +748,52 @@ export default {
       } catch (error) {
         console.error(this.$t('generatedTestCases.discardFailed'), error)
         ElMessage.error(this.$t('generatedTestCases.discardFailed') + ': ' + (error.response?.data?.message || error.message))
+      }
+    },
+
+    // 导出XMind思维导图
+    async exportToXMind(task) {
+      const testCases = parseTestCases(task.final_test_cases)
+      if (testCases.length === 0) {
+        ElMessage.warning(this.$t('generatedTestCases.noCasesToExport'))
+        return
+      }
+
+      this.exportingTaskId = task.task_id
+      try {
+        const payload = {
+          title: task.title || task.task_id,
+          test_cases: testCases.map((testCase, index) => ({
+            caseId: testCase.caseId || `TC${String(index + 1).padStart(3, '0')}`,
+            scenario: testCase.scenario || '',
+            precondition: (testCase.precondition || '').replace(/<br\s*\/?>/gi, '\n'),
+            steps: (testCase.steps || '').replace(/<br\s*\/?>/gi, '\n'),
+            expected: (testCase.expected || '').replace(/<br\s*\/?>/gi, '\n'),
+            priority: testCase.priority || 'P2'
+          }))
+        }
+
+        const response = await api.post('/requirement-analysis/export-xmind/', payload, {
+          responseType: 'blob'
+        })
+
+        const blob = response.data
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        const dateStr = new Date().toISOString().slice(0, 10)
+        link.href = url
+        link.download = `AI生成测试用例_${task.task_id}_${dateStr}.xmind`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+
+        ElMessage.success(this.$t('generatedTestCases.exportXmindSuccess'))
+      } catch (error) {
+        console.error('Export XMind failed:', error)
+        ElMessage.error(this.$t('generatedTestCases.exportXmindFailed') + ': ' + (error.message || ''))
+      } finally {
+        this.exportingTaskId = null
       }
     },
 
@@ -1199,7 +1255,7 @@ export default {
 
 .table-header {
   display: grid;
-  grid-template-columns: 50px 60px 180px 320px 100px 100px 180px 260px;
+  grid-template-columns: 50px 60px 180px 320px 100px 100px 180px 340px;
   background: #f8f9fa;
   font-weight: bold;
   color: #2c3e50;
@@ -1207,7 +1263,7 @@ export default {
 
 .table-body .table-row {
   display: grid;
-  grid-template-columns: 50px 60px 180px 320px 100px 100px 180px 260px;
+  grid-template-columns: 50px 60px 180px 320px 100px 100px 180px 340px;
   border-bottom: 1px solid #eee;
   transition: background 0.2s ease;
 }
@@ -1319,7 +1375,7 @@ export default {
 
 /* 操作列：固定在右侧，横向滚动时始终可见 */
 .action-cell {
-  min-width: 260px;
+  min-width: 340px;
   flex-shrink: 0;
   position: sticky;
   right: 0;
@@ -1349,7 +1405,7 @@ export default {
 .action-buttons {
   display: flex;
   gap: 4px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   margin: 0 auto;
@@ -1483,10 +1539,31 @@ export default {
   background: #c0392b;
 }
 
+.xmind-btn {
+  background: #e67e22;
+  color: white;
+  border: none;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background 0.3s ease;
+  white-space: nowrap;
+}
+
+.xmind-btn:hover:not(:disabled) {
+  background: #d35400;
+}
+
+.xmind-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+}
+
 .action-buttons {
   display: flex;
   gap: 4px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   margin: 0 auto;

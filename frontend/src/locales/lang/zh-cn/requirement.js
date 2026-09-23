@@ -204,6 +204,11 @@ export default {
     delete: '删除',
     batchAdopt: '批量采纳',
     batchDiscard: '批量弃用',
+    exportXmindBtn: '🗺️ 导出XMind',
+    exportingXmind: '🗺️ 导出中...',
+    exportXmindSuccess: 'XMind导出成功',
+    exportXmindFailed: '导出XMind失败',
+    noCasesToExport: '没有测试用例可以导出',
 
     // Empty State
     noTasks: '暂无生成任务',
