@@ -75,18 +75,11 @@ class ChatViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # 解析AI配置：优先使用已配置的Dify，其次使用OpenAI兼容的AI模型
+        # 获取Dify配置
         dify_config = DifyConfig.get_active_config()
-        model_config = None
         if not dify_config:
-            try:
-                from apps.requirement_analysis.models import AIModelConfig
-                model_config = AIModelConfig.objects.filter(is_active=True).first()
-            except Exception:
-                model_config = None
-        if not dify_config and not model_config:
             return Response(
-                {'error': '未配置AI模型或Dify API，请先在配置中心配置'},
+                {'error': '未配置Dify API，请先在配置中心配置'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -99,10 +92,61 @@ class ChatViewSet(viewsets.ViewSet):
         )
         
         try:
-            if dify_config:
-                answer, conversation_id = self._call_dify(session, message, dify_config)
+            # 调用Dify API
+            headers = {
+                'Authorization': f'Bearer {dify_config.api_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            payload = {
+                'inputs': {},
+                'query': message,
+                'user': str(request.user.id),
+                'response_mode': 'blocking'
+            }
+            
+            # 如果有conversation_id，添加到请求中以保持会话连续性
+            if session.conversation_id:
+                payload['conversation_id'] = session.conversation_id
+            
+            # 去除URL末尾的斜杠
+            api_url = dify_config.api_url.rstrip('/')
+            
+            response = requests.post(
+                f'{api_url}/chat-messages',
+                headers=headers,
+                json=payload,
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # 更新会话的conversation_id
+                if 'conversation_id' in data and not session.conversation_id:
+                    session.conversation_id = data['conversation_id']
+                    session.save()
+                
+                # 保存助手回复
+                assistant_message = ChatMessage.objects.create(
+                    session=session,
+                    role='assistant',
+                    content=data.get('answer', ''),
+                    conversation_id=data.get('conversation_id'),
+                    message_id=data.get('message_id')
+                )
+                
+                return Response({
+                    'user_message': ChatMessageSerializer(user_message).data,
+                    'assistant_message': ChatMessageSerializer(assistant_message).data,
+                    'conversation_id': data.get('conversation_id')
+                })
             else:
-                answer, conversation_id = self._call_openai_compatible(session, message, model_config)
+                return Response({
+                    'error': f'Dify API错误: {response.status_code}',
+                    'detail': response.text
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
         except requests.exceptions.Timeout:
             return Response({
                 'error': 'API请求超时'
@@ -111,97 +155,6 @@ class ChatViewSet(viewsets.ViewSet):
             return Response({
                 'error': f'API请求失败: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        # 更新会话的conversation_id
-        if conversation_id and not session.conversation_id:
-            session.conversation_id = conversation_id
-            session.save()
-
-        # 保存助手回复
-        assistant_message = ChatMessage.objects.create(
-            session=session,
-            role='assistant',
-            content=answer,
-            conversation_id=conversation_id
-        )
-
-        return Response({
-            'user_message': ChatMessageSerializer(user_message).data,
-            'assistant_message': ChatMessageSerializer(assistant_message).data,
-            'conversation_id': conversation_id
-        })
-
-
-    def _call_dify(self, session, message, dify_config):
-        """调用Dify API（阻塞模式）"""
-        headers = {
-            'Authorization': f'Bearer {dify_config.api_key}',
-            'Content-Type': 'application/json'
-        }
-        payload = {
-            'inputs': {},
-            'query': message,
-            'user': str(self.request.user.id),
-            'response_mode': 'blocking'
-        }
-        if session.conversation_id:
-            payload['conversation_id'] = session.conversation_id
-
-        api_url = dify_config.api_url.rstrip('/')
-        response = requests.post(
-            f'{api_url}/chat-messages',
-            headers=headers,
-            json=payload,
-            timeout=60
-        )
-        if response.status_code == 200:
-            data = response.json()
-            return data.get('answer', ''), data.get('conversation_id')
-        raise requests.exceptions.RequestException(
-            f'Dify API错误: {response.status_code} - {response.text[:500]}'
-        )
-
-    def _call_openai_compatible(self, session, message, model_config):
-        """调用OpenAI兼容的AI模型接口（阿里云百炼等）"""
-        # 从会话历史构建上下文（已包含刚保存的用户消息）
-        history = list(session.chat_messages.order_by('created_at')[:20])
-        messages = [
-            {'role': m.role, 'content': m.content}
-            for m in history
-        ]
-
-        headers = {
-            'Authorization': f'Bearer {model_config.api_key}',
-            'Content-Type': 'application/json'
-        }
-        payload = {
-            'model': model_config.model_name,
-            'messages': messages,
-            'max_tokens': model_config.max_tokens or 2048,
-            'temperature': model_config.temperature,
-            'top_p': model_config.top_p
-        }
-        # 移除为None的参数，避免接口报错
-        payload = {k: v for k, v in payload.items() if v is not None}
-
-        api_url = (model_config.base_url or '').rstrip('/')
-        response = requests.post(
-            f'{api_url}/chat/completions',
-            headers=headers,
-            json=payload,
-            timeout=60
-        )
-        if response.status_code == 200:
-            data = response.json()
-            try:
-                answer = data['choices'][0]['message']['content']
-            except (KeyError, IndexError, TypeError):
-                raise requests.exceptions.RequestException('AI接口返回格式异常')
-            # OpenAI兼容接口无conversation_id，上下文由消息历史维持
-            return answer, None
-        raise requests.exceptions.RequestException(
-            f'AI接口错误: {response.status_code} - {response.text[:500]}'
-        )
 
 
 def assistant_view(request):

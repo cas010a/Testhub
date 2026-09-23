@@ -83,19 +83,6 @@ export function captureDeviceScreenshot(id) {
     timeout: 15000 // 截图可能需要较长时间
   })
 }
-/**
- * 执行设备操作（脚本录制/回放用）
- * @param {number} id - 设备ID
- * @param {Object} data - { action: 'tap'|'swipe'|'text'|'long_press'|'keyevent'|'sleep', params: {...} }
- */
-export function sendDeviceAction(id, data) {
-  return request({
-    url: `/app-automation/devices/${id}/action/`,
-    method: 'post',
-    data,
-    timeout: 25000
-  })
-}
 
 /**
  * 删除设备

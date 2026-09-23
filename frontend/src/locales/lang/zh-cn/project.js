@@ -110,8 +110,6 @@ export default {
     mcpConsoleDesc: 'MCP 工具调用日志与危险操作待确认审批',
     docsCenter: '文档中心',
     docsCenterDesc: '平台使用手册与功能说明文档在线浏览',
-    userManage: '用户管理',
-    userManageDesc: '平台用户的新增、管理与权限配置',
 
     // Messages
     featureInDevelopment: '功能正在开发中......',

@@ -221,6 +221,72 @@ def apply_extract_rules(response, rules, environment, variables):
     return extracted
 
 
+
+TOKEN_FIELD_KEYS = ('token', 'access_token', 'accessToken', 'access', 'jwt', 'id_token', 'refresh', 'refresh_token')
+
+
+def auto_extract_token(response, variables):
+    """自动识别响应中的鉴权 token 字段并写入共享变量（登录步骤自动继承）
+
+    无需手动配置 extract_rules：登录接口的响应中若包含 token/access 等字段，
+    会自动提取并写入 variables，供后续步骤通过 {{token}} / {{access}} 等引用。
+    仅在变量尚未存在时写入，避免覆盖已提取或环境变量中的值。
+    """
+    if not isinstance(variables, dict):
+        return {}
+
+    data = None
+    try:
+        data = response.json()
+    except Exception:
+        try:
+            data = json.loads(response.text or '')
+        except Exception:
+            data = None
+
+    if not isinstance(data, dict):
+        return {}
+
+    extracted = {}
+
+    def _collect(obj):
+        if not isinstance(obj, dict):
+            return
+        for key in TOKEN_FIELD_KEYS:
+            if key in extracted:
+                continue
+            value = obj.get(key)
+            if isinstance(value, str) and value.strip():
+                extracted[key] = value
+
+    _collect(data)
+    for sub_key in ('data', 'result', 'results'):
+        sub = data.get(sub_key)
+        if isinstance(sub, dict):
+            _collect(sub)
+        elif isinstance(sub, list):
+            for item in sub:
+                if isinstance(item, dict):
+                    _collect(item)
+                    break
+
+    if not extracted:
+        return {}
+
+    # 规范化：优先使用 token 字段，否则用 access_token/access 作为 {{token}} 别名
+    if 'token' not in extracted:
+        for key in ('access_token', 'accessToken', 'access', 'jwt', 'id_token'):
+            if key in extracted:
+                extracted['token'] = extracted[key]
+                break
+
+    for key, value in extracted.items():
+        if key not in variables:
+            variables[key] = value
+
+    return extracted
+
+
 def execute_test_suite(test_suite, environment, executed_by):
     """执行测试套件并返回结果"""
     from .models import TestExecution, RequestHistory
@@ -248,17 +314,18 @@ def execute_test_suite(test_suite, environment, executed_by):
         results = []
         passed_count = 0
         failed_count = 0
-        
+        # 初始化共享变量上下文（环境变量 + 步骤间提取的变量，供后续步骤 {{变量}} 引用）
+        variables = {}
+        if environment:
+            variables.update(environment.variables)
+
         # 执行每个请求
         for suite_request in suite_requests:
             api_request = suite_request.request
-            
+
             try:
-                # 解析环境变量
-                variables = {}
-                if environment:
-                    variables.update(environment.variables)
-                
+                # 使用共享变量上下文（登录步骤提取的 token 会在此累积，供后续步骤继承）
+
                 # 替换URL中的变量（先解析动态函数，再替换环境变量）
                 url = _replace_variables(api_request.url, variables)
                 url = resolver.resolve(url)
@@ -314,10 +381,12 @@ def execute_test_suite(test_suite, environment, executed_by):
                 assertions_results = execute_assertions(response, assertions)
 
                 # 响应变量提取：自动写入环境变量与本地上下文，供后续请求 {{变量}} 引用
-                extracted_vars = {}
+                # 登录步骤自动提取 token（无需手动配置 extract_rules）
+                extracted_vars = auto_extract_token(response, variables)
                 if api_request.extract_rules:
-                    extracted_vars = apply_extract_rules(response, api_request.extract_rules, environment, variables)
-
+                    explicit_vars = apply_extract_rules(response, api_request.extract_rules, environment, variables)
+                    extracted_vars.update(explicit_vars)
+                
                 # 检查所有断言是否通过
                 passed = True
                 error_message = ''
@@ -492,7 +561,7 @@ def execute_api_request(api_request, environment, executed_by):
         
         assertions_results = execute_assertions(response, assertions)
 
-        # 响应变量提取：自动写入环境变量
+        # 响应变量提取：自动写入环境变量，供后续请求 {{变量}} 引用
         extracted_vars = {}
         if api_request.extract_rules:
             extracted_vars = apply_extract_rules(response, api_request.extract_rules, environment, variables)

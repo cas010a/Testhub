@@ -46,7 +46,7 @@
         if (actualImage) {
             return renderImage(actualImage);
         }
-        return '无差异数据';
+        return 'No diff data provided';
     }
 
     var TestResultView = Backbone.Marionette.View.extend({
@@ -147,15 +147,15 @@
             }
 
             return (
-                '<h3 class="pane__section-title">屏幕对比</h3>' +
+                '<h3 class="pane__section-title">Screen Diff</h3>' +
                 '<div class="screen-diff__content">' +
                 '<div class="screen-diff__switchers">' +
                 '<label><input type="radio" name="' +
                 data.radioName +
-                '" value="diff"> 显示差异</label>' +
+                '" value="diff"> Show diff</label>' +
                 '<label><input type="radio" name="' +
                 data.radioName +
-                '" value="overlay"> 显示叠加</label>' +
+                '" value="overlay"> Show overlay</label>' +
                 '</div>' +
                 renderDiffContent(
                     data.diffType,

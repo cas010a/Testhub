@@ -1,11 +1,11 @@
-from rest_framework import generics, status, permissions, filters, serializers
+from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.contrib.auth import login, logout
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from .models import User
-from .serializers import UserSerializer, UserCreateSerializer, UserManageSerializer, LoginSerializer
+from .serializers import UserSerializer, UserCreateSerializer, LoginSerializer
 
 # JWT 相关导入
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -103,30 +103,6 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all().order_by('username')
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
-
-
-class UserManageListView(generics.ListCreateAPIView):
-    """管理员：用户管理列表 + 创建用户（仅 is_staff 可用）"""
-    queryset = User.objects.all().order_by('-date_joined')
-    serializer_class = UserManageSerializer
-    permission_classes = [permissions.IsAdminUser]
-    filter_backends = [filters.SearchFilter]
-    search_fields = ['username', 'email', 'first_name', 'last_name',
-                     'phone', 'department', 'position']
-
-
-class UserManageDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """管理员：用户详情 / 编辑（含重置密码、启禁用、角色）/ 删除（仅 is_staff 可用）"""
-    queryset = User.objects.all()
-    serializer_class = UserManageSerializer
-    permission_classes = [permissions.IsAdminUser]
-
-    def perform_destroy(self, instance):
-        if instance == self.request.user:
-            raise serializers.ValidationError('不能删除当前登录的管理员账号')
-        if instance.is_superuser and User.objects.filter(is_superuser=True).count() <= 1:
-            raise serializers.ValidationError('不能删除最后一个超级管理员账号')
-        instance.delete()
 
 
 # ========== 图形验证码 & 短信验证码 ==========

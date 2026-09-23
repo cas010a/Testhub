@@ -17,14 +17,6 @@
           <span v-if="isExporting">{{ $t('taskDetail.exporting') }}</span>
           <span v-else>{{ $t('taskDetail.exportBtn') }}</span>
         </button>
-        <button
-          v-if="testCases.length > 0"
-          class="export-btn xmind-btn"
-          @click="exportToXMind"
-          :disabled="isExportingXmind">
-          <span v-if="isExportingXmind">{{ $t('taskDetail.exportingXmind') }}</span>
-          <span v-else>{{ $t('taskDetail.exportXmindBtn') }}</span>
-        </button>
       </div>
     </div>
 
@@ -282,7 +274,6 @@ export default {
       currentPage: 1,
       pageSize: 10,
       isExporting: false,
-      isExportingXmind: false,
       // 编辑相关状态
       isEditing: false,
       isSaving: false,
@@ -385,10 +376,6 @@ export default {
       for (let line of lines) {
         const trimmedLine = line.trim()
         if (trimmedLine.includes('|') && !trimmedLine.includes('--------')) {
-          // 跳过 markdown 表头分隔行（如 | --- | --- | 或 | :---: | --- |）
-          const sepCells = trimmedLine.split('|').map(cell => cell.trim()).filter(cell => cell)
-          const isSeparator = sepCells.length > 0 && sepCells.every(cell => /^:?-+:?$/.test(cell))
-          if (isSeparator) continue
           const cells = trimmedLine.split('|').map(cell => cell.trim()).filter(cell => cell)
           if (cells.length > 1) {
             tableData.push(cells)
@@ -976,53 +963,6 @@ export default {
         ElMessage.error(this.$t('taskDetail.exportFailed') + ': ' + (error.message || ''))
       } finally {
         this.isExporting = false
-      }
-    },
-
-    // 导出到XMind
-    async exportToXMind() {
-      if (this.testCases.length === 0) {
-        ElMessage.warning(this.$t('taskDetail.noCasesToExport'))
-        return
-      }
-
-      this.isExportingXmind = true
-
-      try {
-        const payload = {
-          title: this.task.title || `任务${this.taskId}`,
-          test_cases: this.testCases.map((testCase, index) => ({
-            caseId: testCase.caseId || `TC${String(index + 1).padStart(3, '0')}`,
-            scenario: testCase.scenario || '',
-            precondition: this.formatTextForList(testCase.precondition || ''),
-            steps: this.formatTextForList(testCase.steps || ''),
-            expected: this.formatTextForList(testCase.expected || ''),
-            priority: testCase.priority || 'P2'
-          }))
-        }
-
-        const response = await api.post('/requirement-analysis/export-xmind/', payload, {
-          responseType: 'blob'
-        })
-
-        // 触发浏览器下载
-        const blob = response.data
-        const url = window.URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        const dateStr = new Date().toISOString().slice(0, 10)
-        link.href = url
-        link.download = `AI生成测试用例_${this.taskId}_${dateStr}.xmind`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(url)
-
-        ElMessage.success(this.$t('taskDetail.exportXmindSuccess'))
-      } catch (error) {
-        console.error('Export XMind failed:', error)
-        ElMessage.error(this.$t('taskDetail.exportXmindFailed') + ': ' + (error.message || ''))
-      } finally {
-        this.isExportingXmind = false
       }
     }
   }

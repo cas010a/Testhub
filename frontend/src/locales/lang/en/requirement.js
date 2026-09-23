@@ -511,8 +511,6 @@ export default {
     taskId: 'Task ID',
     exportBtn: '💾 Export Excel',
     exporting: '💾 Exporting...',
-    exportXmindBtn: '🗺️ Export XMind',
-    exportingXmind: '🗺️ Exporting...',
 
     // Requirement Collapse Card
     requirementTitle: '📋 Requirement Description',
@@ -610,8 +608,6 @@ export default {
     noCasesToExport: 'No test cases to export',
     exportSuccess: 'Test cases exported successfully',
     exportFailed: 'Excel export failed',
-    exportXmindSuccess: 'XMind exported successfully',
-    exportXmindFailed: 'XMind export failed',
 
     // Confirm Buttons
     btnConfirm: 'Confirm',

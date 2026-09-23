@@ -511,8 +511,6 @@ export default {
     taskId: '任务ID',
     exportBtn: '💾 导出Excel',
     exporting: '💾 导出中...',
-    exportXmindBtn: '🗺️ 导出XMind',
-    exportingXmind: '🗺️ 导出中...',
 
     // 需求描述折叠卡片
     requirementTitle: '📋 需求描述',
@@ -610,8 +608,6 @@ export default {
     noCasesToExport: '没有测试用例可以导出',
     exportSuccess: '测试用例导出成功',
     exportFailed: '导出Excel失败',
-    exportXmindSuccess: 'XMind导出成功',
-    exportXmindFailed: '导出XMind失败',
 
     // 确认按钮
     btnConfirm: '确定',

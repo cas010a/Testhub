@@ -8,7 +8,6 @@ import Register from '@/views/auth/Register.vue'
 import Layout from '@/layout/index.vue'
 import ProjectList from '@/views/projects/ProjectList.vue'
 import Home from '@/views/Home.vue'
-import UserManage from '@/views/users/UserManage.vue'
 import DataFactory from '@/views/data-factory/DataFactory.vue'
 import ApiDashboard from '@/views/api-testing/Dashboard.vue'
 import ApiProjectManagement from '@/views/api-testing/ProjectManagement.vue'
@@ -62,12 +61,6 @@ const routes = [
         name: 'Home',
         component: Home,
         meta: { requiresAuth: true }
-    },
-    {
-        path: '/users/manage',
-        name: 'UserManage',
-        component: UserManage,
-        meta: { requiresAuth: true, requiresAdmin: true }
     },
     {
         path: '/login',
@@ -534,12 +527,6 @@ const routes = [
                 component: () => import('@/views/app-automation/devices/DeviceList.vue')
             },
             {
-                path: 'recorder',
-                name: 'AppScriptRecorder',
-                component: () => import('@/views/app-automation/recorder/ScriptRecorder.vue'),
-                meta: { title: '脚本录制' }
-            },
-            {
                 path: 'packages',
                 name: 'AppPackageList',
                 component: () => import('@/views/app-automation/packages/PackageList.vue')
@@ -760,18 +747,7 @@ router.beforeEach(async (to, _from, next) => {
         }
     }
 
-    // 旧会话缓存的用户信息缺少角色字段（is_staff）时，刷新一次以支持管理员判断
-    if (userStore.user && userStore.user.is_staff === undefined && userStore.accessToken) {
-        try {
-            await userStore.fetchProfile()
-        } catch (error) {
-            console.error('刷新用户信息失败:', error)
-        }
-    }
-
-    if (to.meta.requiresAdmin && !userStore.user?.is_staff) {
-        next('/home')
-    } else if (to.meta.requiresAuth && !userStore.isAuthenticated) {
+    if (to.meta.requiresAuth && !userStore.isAuthenticated) {
         next('/login')
     } else if (to.meta.requiresGuest && userStore.isAuthenticated) {
         next('/home')

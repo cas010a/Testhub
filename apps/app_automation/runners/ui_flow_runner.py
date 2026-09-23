@@ -295,7 +295,6 @@ class UiFlowRunner:
             'long_press': self._action_long_press,
             'drag': self._action_drag,
             'swipe_to': self._action_swipe_to,
-            'keyevent': self._action_keyevent,
             
             # 条件动作
             'image_exists_click': self._action_image_exists_click,
@@ -1541,31 +1540,3 @@ class UiFlowRunner:
         except Exception as e:
             logger.error(f"foreach_assert 执行失败: {str(e)}")
             raise
-
-
-    def _action_keyevent(self, step: Dict[str, Any]):
-        """
-        按键事件（脚本录制生成）。
-        支持 keycode_name（如 BACK/HOME/MENU/ENTER/DEL）或数字 keycode。
-        配置示例:
-            keycode: 4
-            keycode_name: "BACK"
-        """
-        keycode = step.get('keycode')
-        keycode_name = step.get('keycode_name', '')
-
-        try:
-            from airtest.core.api import keyevent
-        except ImportError:
-            raise RuntimeError("当前 Airtest 环境不支持 keyevent")
-
-        if keycode_name:
-            # 优先使用名称（更可读），兼容 'BACK' / 'KEYCODE_BACK'
-            airtest_key = keycode_name if str(keycode_name).startswith('KEYCODE_') else f"KEYCODE_{keycode_name}"
-            logger.info(f"发送按键: {airtest_key}")
-            keyevent(airtest_key)
-        elif keycode is not None:
-            logger.info(f"发送按键 keycode={keycode}")
-            keyevent(str(keycode))
-        else:
-            raise ValueError("keyevent 步骤需要 keycode 或 keycode_name 参数")

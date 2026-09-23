@@ -61,7 +61,6 @@ export default {
     deviceManagement: 'Device Management',
     packageManagement: 'Package Management',
     caseDesign: 'Case Design',
-    scriptRecorder: 'Script Recorder',
 
     // AI Intelligent Mode
     aiIntelligentTesting: 'AI Intelligent Testing',

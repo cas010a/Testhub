@@ -40,7 +40,7 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-from .utils import execute_assertions, extract_response_variables, apply_extract_rules
+from .utils import execute_assertions, apply_extract_rules, auto_extract_token
 from .operation_logger import log_operation
 from .variable_resolver import VariableResolver
 from .serializers import (
@@ -178,6 +178,9 @@ class ApiProjectViewSet(viewsets.ModelViewSet):
                     'password': 'password123'
                 }
             },
+            extract_rules=[
+                {'name': 'token', 'source': 'body', 'expression': 'access'}
+            ],
             created_by=user,
             order=2
         )
@@ -459,8 +462,7 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
                 if assertion.get('type') == 'response_time':
                     assertion['actual_time'] = response_time
             assertions_results = execute_assertions(response, assertions)
-
-            # 响应变量提取：自动写入环境变量与本地上下文
+            # 响应变量提取：自动写入环境变量与本地上下文，供后续请求 {{变量}} 引用
             extracted_vars = {}
             extract_rules = request.data.get('extract_rules', api_request.extract_rules) or []
             if extract_rules:
@@ -472,6 +474,7 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
                         env_obj = None
                 extracted_vars = apply_extract_rules(response, extract_rules, env_obj, variables)
 
+            
             # 保存请求历史
             history = RequestHistory.objects.create(
                 request=api_request,
@@ -720,17 +723,18 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
             
             # 创建变量解析器
             resolver = VariableResolver()
+            # 初始化共享变量上下文（环境变量 + 步骤间提取的变量，供后续步骤 {{变量}} 引用）
+            variables = {}
+            if test_suite.environment:
+                variables.update(test_suite.environment.variables)
 
             # 执行每个请求
             for suite_request in suite_requests:
                 api_request = suite_request.request
-                
+
                 try:
-                    # 解析环境变量
-                    variables = {}
-                    if test_suite.environment:
-                        variables.update(test_suite.environment.variables)
-                    
+                    # 使用共享变量上下文（登录步骤提取的 token 会在此累积，供后续步骤继承）
+
                     # 替换URL中的变量（先解析动态函数，再替换环境变量）
                     url = self._replace_variables(api_request.url, variables)
                     url = resolver.resolve(url)
@@ -789,9 +793,11 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
                     assertions_results = execute_assertions(response, assertions)
 
                     # 响应变量提取：自动写入环境变量，供后续请求 {{变量}} 引用
-                    extracted_vars = {}
+                    # 登录步骤自动提取 token（无需手动配置 extract_rules）
+                    extracted_vars = auto_extract_token(response, variables)
                     if api_request.extract_rules:
-                        extracted_vars = apply_extract_rules(response, api_request.extract_rules, test_suite.environment, variables)
+                        explicit_vars = apply_extract_rules(response, api_request.extract_rules, test_suite.environment, variables)
+                        extracted_vars.update(explicit_vars)
 
                     # 检查所有断言是否通过
                     passed = True
@@ -1113,7 +1119,6 @@ class TestExecutionViewSet(viewsets.ReadOnlyModelViewSet):
                                     'generate',
                                     str(Path(results_dir)),
                                     '--clean',
-                                    '--lang', 'zh',  # 报告界面默认中文
                                     '--output', str(Path(report_output_dir))
                                 ]
                             else:
@@ -1123,7 +1128,6 @@ class TestExecutionViewSet(viewsets.ReadOnlyModelViewSet):
                                     'generate',
                                     str(Path(results_dir)),
                                     '--clean',
-                                    '--lang', 'zh',  # 报告界面默认中文
                                     '--output', str(Path(report_output_dir))
                                 ]
                             
@@ -1902,11 +1906,8 @@ class ScheduledTaskViewSet(viewsets.ModelViewSet):
             has_config = notification_config is not None
             has_custom_bots = bool(notification_setting.custom_webhook_bots)
             has_custom_recipients = notification_setting.custom_recipients.exists()
-            # 任务表单中配置的通知邮箱也视为有效收件人（否则填了邮箱也不发）
-            task_notify_emails = getattr(task, 'notify_emails', None)
-            has_task_notify_emails = bool(task_notify_emails)
             
-            if not (has_config or has_custom_bots or has_custom_recipients or has_task_notify_emails):
+            if not (has_config or has_custom_bots or has_custom_recipients):
                 logger.warning("没有找到通知配置且无自定义设置")
                 return
 

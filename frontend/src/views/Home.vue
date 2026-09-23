@@ -190,15 +190,6 @@
           <h3>{{ $t('home.docsCenter') }}</h3>
           <p>{{ $t('home.docsCenterDesc') }}</p>
         </div>
-
-        <!-- 用户管理（仅管理员可见） -->
-        <div v-if="userStore.user?.is_staff" class="nav-card" @click="handleNavigate('userManage')" role="button" tabindex="0">
-          <div class="card-icon user-icon">
-            <el-icon><User /></el-icon>
-          </div>
-          <h3>{{ $t('home.userManage') }}</h3>
-          <p>{{ $t('home.userManageDesc') }}</p>
-        </div>
       </div>
     </div>
 
@@ -234,7 +225,7 @@ import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
 import { track } from '@/utils/tracker'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { MagicStick, Link, Monitor, DataLine, Cpu, Setting, ChatDotRound, UserFilled, ArrowDown, Cellphone, Tickets, Select, Odometer, Connection, Document, User } from '@element-plus/icons-vue'
+import { MagicStick, Link, Monitor, DataLine, Cpu, Setting, ChatDotRound, UserFilled, ArrowDown, Cellphone, Tickets, Select, Odometer, Connection, Document } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -331,8 +322,7 @@ const handleNavigate = (type) => {
     'performance': '/performance-testing/dashboard',
     'monitor': '/monitor/dashboard',
     'mcp': '/mcp/console',
-    'docs': '/docs-center',
-    'userManage': '/users/manage'
+    'docs': '/docs-center'
   }
 
   if (routes[type]) {
@@ -621,11 +611,6 @@ const handleNavigate = (type) => {
   &.perf-icon {
     background: #e6fffb;
     color: #13c2c2;
-  }
-
-  &.user-icon {
-    background: #f0f5ff;
-    color: #2f54eb;
   }
 }
 

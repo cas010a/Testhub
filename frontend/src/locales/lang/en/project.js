@@ -110,8 +110,6 @@ export default {
     mcpConsoleDesc: 'MCP tool call logs and dangerous action approval',
     docsCenter: 'Docs Center',
     docsCenterDesc: 'Browse platform manuals and feature documentation online',
-    userManage: 'User Management',
-    userManageDesc: 'Add, manage and configure platform users',
 
     // Messages
     featureInDevelopment: 'Feature is under development......',

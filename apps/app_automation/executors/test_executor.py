@@ -242,8 +242,8 @@ class AppTestExecutor:
                 logger.warning("未找到 Allure 命令，跳过报告生成")
                 return None
             
-            # 生成报告（--lang zh 使报告界面默认中文）
-            cmd = [allure_path, 'generate', allure_results_dir, '-o', report_dir, '--clean', '--lang', 'zh']
+            # 生成报告
+            cmd = [allure_path, 'generate', allure_results_dir, '-o', report_dir, '--clean']
             
             logger.info(f"生成 Allure 报告: {' '.join(cmd)}")
             

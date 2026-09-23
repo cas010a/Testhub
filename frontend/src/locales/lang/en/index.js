@@ -21,7 +21,6 @@ import monitorModule from './monitor.js'
 import performanceTestingModule from './performance-testing.js'
 import mcpModule from './mcp.js'
 import docsModule from './docs.js'
-import userManageModule from './user-manage.js'
 
 export default {
   // 模块化导出
@@ -94,9 +93,6 @@ export default {
 
   // Docs Center
   docs: docsModule.docs,
-
-  // User Management
-  userManage: userManageModule,
 
   // Element Plus 语言包
   ...elementEn

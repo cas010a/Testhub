@@ -176,10 +176,6 @@
               <el-icon><Cellphone /></el-icon>
               <span>{{ $t('menu.deviceManagement') }}</span>
             </el-menu-item>
-            <el-menu-item index="/app-automation/recorder">
-              <el-icon><Microphone /></el-icon>
-              <span>{{ $t('menu.scriptRecorder') }}</span>
-            </el-menu-item>
             <el-menu-item index="/app-automation/packages">
               <el-icon><Collection /></el-icon>
               <span>{{ $t('menu.packageManagement') }}</span>
@@ -447,7 +443,7 @@ import { useI18n } from 'vue-i18n'
 import {
   Monitor, Folder, Document, Flag, Check, Collection, VideoPlay,
   DataAnalysis, ChatDotRound, DocumentCopy, Link, MagicStick,
-  Odometer, Timer, Setting, AlarmClock, Bell, Aim, Edit, Cpu, ArrowDown, Cellphone, Connection, FolderOpened, Tickets, Plus, Microphone,
+  Odometer, Timer, Setting, AlarmClock, Bell, Aim, Edit, Cpu, ArrowDown, Cellphone, Connection, FolderOpened, Tickets, Plus,
   SetUp, TrendCharts
 } from '@element-plus/icons-vue'
 import logoSvg from '@/assets/images/logo.svg'
@@ -557,7 +553,6 @@ const breadcrumbTitle = computed(() => {
     '/app-automation/dashboard': t('menu.dashboard'),
     '/app-automation/projects': t('menu.projectManagement'),
     '/app-automation/devices': t('menu.deviceManagement'),
-    '/app-automation/recorder': t('menu.scriptRecorder'),
     '/app-automation/packages': t('menu.packageManagement'),
     '/app-automation/elements': t('menu.elementManagement'),
     '/app-automation/scene-builder': t('menu.caseDesign'),

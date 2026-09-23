@@ -61,7 +61,6 @@ export default {
     deviceManagement: '设备管理',
     packageManagement: '包名管理',
     caseDesign: '用例编排',
-    scriptRecorder: '脚本录制',
 
     // AI智能模式
     aiIntelligentTesting: 'AI 智能测试',
